@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -18,6 +19,7 @@ type model struct {
 	selected map[int]struct{}
 	loading  bool
 	status   string
+	s3Client *S3Client
 }
 
 func initialModel() model {
@@ -26,9 +28,15 @@ func initialModel() model {
 		log.Fatalf("Error loading config: %v", err)
 	}
 
+	s3Client, err := NewS3Client(context.Background())
+	if err != nil {
+		log.Printf("Warning: Failed to initialize S3 client: %v", err)
+	}
+
 	return model{
 		series:   config.Series,
 		selected: make(map[int]struct{}),
+		s3Client: s3Client,
 	}
 }
 
@@ -66,7 +74,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter", " ":
 			if !m.loading {
+				m.loading = true
 				return m, m.generateFeed()
+			}
+		case "u":
+			if !m.loading && m.s3Client != nil {
+				m.loading = true
+				return m, m.generateAndUploadFeed()
 			}
 		}
 	case feedResult:
@@ -108,6 +122,42 @@ func (m model) generateFeed() tea.Cmd {
 	}
 }
 
+func (m model) generateAndUploadFeed() tea.Cmd {
+	return func() tea.Msg {
+		series := m.series[m.cursor]
+		
+		seriesData, err := fetchSeriesData(series.GUID)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error fetching series data: %v", err))
+		}
+
+		rssXML, err := generateRSSFeed(seriesData)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error generating RSS feed: %v", err))
+		}
+
+		// Extract filename from S3 path
+		filename := filepath.Base(series.S3Path)
+		if !strings.HasSuffix(filename, ".rss") {
+			filename = fmt.Sprintf("%s.rss", series.GUID)
+		}
+
+		// Write local file
+		err = os.WriteFile(filename, []byte(rssXML), 0644)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error writing RSS file: %v", err))
+		}
+
+		// Upload to S3
+		err = m.s3Client.UploadFile(context.Background(), filename, series.S3Path)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error uploading to S3: %v", err))
+		}
+
+		return feedResult(fmt.Sprintf("RSS feed written to %s and uploaded to %s (%s by %s, %d episodes)", filename, series.S3Path, seriesData.Title, seriesData.Author, len(seriesData.Episodes)))
+	}
+}
+
 func (m model) View() string {
 	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
 	selectedStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("170"))
@@ -132,7 +182,11 @@ func (m model) View() string {
 		s += line + "\n"
 	}
 
-	s += "\n" + statusStyle.Render("j/k: navigate • enter/space: generate feed • q: quit")
+	s3Status := ""
+	if m.s3Client != nil {
+		s3Status = " • u: upload to S3"
+	}
+	s += "\n" + statusStyle.Render(fmt.Sprintf("j/k: navigate • enter/space: generate feed%s • q: quit", s3Status))
 
 	if m.loading {
 		s += "\n\n" + statusStyle.Render("Generating feed...")
