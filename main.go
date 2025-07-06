@@ -130,12 +130,7 @@ type RSSFeed struct {
 
 type Channel struct {
 	Title         string `xml:"title"`
-	Link          string `xml:"link"`
 	Description   string `xml:"description"`
-	Language      string `xml:"language"`
-	Copyright     string `xml:"copyright"`
-	PubDate       string `xml:"pubDate"`
-	LastBuildDate string `xml:"lastBuildDate"`
 	ITunesAuthor  string `xml:"itunes:author"`
 	ITunesImage   Image  `xml:"itunes:image"`
 	Items         []Item `xml:"item"`
@@ -151,7 +146,6 @@ type Item struct {
 	PubDate     string    `xml:"pubDate"`
 	GUID        string    `xml:"guid"`
 	Enclosure   Enclosure `xml:"enclosure"`
-	ITunesAuthor string   `xml:"itunes:author"`
 	ITunesDuration string `xml:"itunes:duration"`
 }
 
@@ -173,22 +167,13 @@ func formatDuration(seconds int) string {
 }
 
 func generateRSSFeed(seriesData *SeriesData) (string, error) {
-	pubDate, err := time.Parse(time.RFC3339, seriesData.PublicationDate)
-	if err != nil {
-		pubDate = time.Now()
-	}
 
 	feed := RSSFeed{
 		Version: "2.0",
 		Xmlns:   "http://www.itunes.com/dtds/podcast-1.0.dtd",
 		Channel: Channel{
 			Title:         seriesData.Title,
-			Link:          seriesData.Link,
 			Description:   seriesData.Description,
-			Language:      "fi",
-			Copyright:     seriesData.Copyright,
-			PubDate:       pubDate.Format(time.RFC1123Z),
-			LastBuildDate: time.Now().Format(time.RFC1123Z),
 			ITunesAuthor:  seriesData.Author,
 			ITunesImage:   Image{Href: seriesData.CoverURL},
 		},
@@ -210,7 +195,6 @@ func generateRSSFeed(seriesData *SeriesData) (string, error) {
 				Length: fmt.Sprintf("%d", episode.AudioLength),
 				Type:   "audio/mpeg",
 			},
-			ITunesAuthor:   episode.Author,
 			ITunesDuration: formatDuration(episode.AudioDuration),
 		}
 
