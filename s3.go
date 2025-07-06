@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -27,24 +26,18 @@ func NewS3Client(ctx context.Context) (*S3Client, error) {
 	}, nil
 }
 
-func (s *S3Client) UploadFile(ctx context.Context, filePath, s3Path string) error {
+func (s *S3Client) UploadRSSContent(ctx context.Context, rssContent, s3Path string) error {
 	// Parse S3 path (s3://bucket/key)
 	bucket, key, err := parseS3Path(s3Path)
 	if err != nil {
 		return fmt.Errorf("failed to parse S3 path: %w", err)
 	}
 
-	// Read file content
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
-	}
-
-	// Upload to S3
+	// Upload to S3 directly from memory
 	_, err = s.client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:      aws.String(bucket),
 		Key:         aws.String(key),
-		Body:        strings.NewReader(string(content)),
+		Body:        strings.NewReader(rssContent),
 		ContentType: aws.String("application/rss+xml"),
 		ACL:         types.ObjectCannedACLPublicRead,
 	})

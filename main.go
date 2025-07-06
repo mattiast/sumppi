@@ -136,25 +136,13 @@ func (m model) generateAndUploadFeed() tea.Cmd {
 			return feedResult(fmt.Sprintf("Error generating RSS feed: %v", err))
 		}
 
-		// Extract filename from S3 path
-		filename := filepath.Base(series.S3Path)
-		if !strings.HasSuffix(filename, ".rss") {
-			filename = fmt.Sprintf("%s.rss", series.GUID)
-		}
-
-		// Write local file
-		err = os.WriteFile(filename, []byte(rssXML), 0644)
-		if err != nil {
-			return feedResult(fmt.Sprintf("Error writing RSS file: %v", err))
-		}
-
-		// Upload to S3
-		err = m.s3Client.UploadFile(context.Background(), filename, series.S3Path)
+		// Upload directly to S3 from memory
+		err = m.s3Client.UploadRSSContent(context.Background(), rssXML, series.S3Path)
 		if err != nil {
 			return feedResult(fmt.Sprintf("Error uploading to S3: %v", err))
 		}
 
-		return feedResult(fmt.Sprintf("RSS feed written to %s and uploaded to %s (%s by %s, %d episodes)", filename, series.S3Path, seriesData.Title, seriesData.Author, len(seriesData.Episodes)))
+		return feedResult(fmt.Sprintf("RSS feed uploaded to %s (%s by %s, %d episodes)", series.S3Path, seriesData.Title, seriesData.Author, len(seriesData.Episodes)))
 	}
 }
 
