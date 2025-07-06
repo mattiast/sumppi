@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 type S3Client struct {
@@ -45,6 +46,7 @@ func (s *S3Client) UploadFile(ctx context.Context, filePath, s3Path string) erro
 		Key:         aws.String(key),
 		Body:        strings.NewReader(string(content)),
 		ContentType: aws.String("application/rss+xml"),
+		ACL:         types.ObjectCannedACLPublicRead,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to upload to S3: %w", err)
