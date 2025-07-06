@@ -140,11 +140,16 @@ type Image struct {
 	Href string `xml:"href,attr"`
 }
 
+type GUID struct {
+	IsPermaLink string `xml:"isPermaLink,attr"`
+	Value       string `xml:",chardata"`
+}
+
 type Item struct {
 	Title       string    `xml:"title"`
 	Description string    `xml:"description"`
 	PubDate     string    `xml:"pubDate"`
-	GUID        string    `xml:"guid"`
+	GUID        GUID      `xml:"guid"`
 	Enclosure   Enclosure `xml:"enclosure"`
 	ITunesDuration string `xml:"itunes:duration"`
 }
@@ -189,7 +194,7 @@ func generateRSSFeed(seriesData *SeriesData) (string, error) {
 			Title:       episode.Title,
 			Description: episode.Description,
 			PubDate:     episodePubDate.Format(time.RFC1123Z),
-			GUID:        episode.GUID,
+			GUID:        GUID{IsPermaLink: "false", Value: episode.GUID},
 			Enclosure: Enclosure{
 				URL:    episode.AudioURL,
 				Length: fmt.Sprintf("%d", episode.AudioLength),
