@@ -4,35 +4,156 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/BurntSushi/toml"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
+type model struct {
+	series   []Series
+	cursor   int
+	selected map[int]struct{}
+	loading  bool
+	status   string
+}
+
+func initialModel() model {
+	config, err := loadConfig()
+	if err != nil {
+		log.Fatalf("Error loading config: %v", err)
+	}
+
+	return model{
+		series:   config.Series,
+		selected: make(map[int]struct{}),
+	}
+}
+
+func loadConfig() (*SeriesConfig, error) {
+	configPath := "series.toml"
+	if envPath := os.Getenv("SUMPPI_CONFIG"); envPath != "" {
+		configPath = envPath
+	}
+
+	var config SeriesConfig
+	if _, err := toml.DecodeFile(configPath, &config); err != nil {
+		return nil, fmt.Errorf("failed to decode config file: %w", err)
+	}
+
+	return &config, nil
+}
+
+func (m model) Init() tea.Cmd {
+	return nil
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "ctrl+c", "q":
+			return m, tea.Quit
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.series)-1 {
+				m.cursor++
+			}
+		case "enter", " ":
+			if !m.loading {
+				return m, m.generateFeed()
+			}
+		}
+	case feedResult:
+		m.loading = false
+		m.status = string(msg)
+	}
+
+	return m, nil
+}
+
+type feedResult string
+
+func (m model) generateFeed() tea.Cmd {
+	return func() tea.Msg {
+		series := m.series[m.cursor]
+		
+		seriesData, err := fetchSeriesData(series.GUID)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error fetching series data: %v", err))
+		}
+
+		rssXML, err := generateRSSFeed(seriesData)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error generating RSS feed: %v", err))
+		}
+
+		// Extract filename from S3 path
+		filename := filepath.Base(series.S3Path)
+		if !strings.HasSuffix(filename, ".rss") {
+			filename = fmt.Sprintf("%s.rss", series.GUID)
+		}
+
+		err = os.WriteFile(filename, []byte(rssXML), 0644)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error writing RSS file: %v", err))
+		}
+
+		return feedResult(fmt.Sprintf("RSS feed written to %s (%s by %s, %d episodes)", filename, seriesData.Title, seriesData.Author, len(seriesData.Episodes)))
+	}
+}
+
+func (m model) View() string {
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
+	selectedStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("170"))
+	normalStyle := lipgloss.NewStyle()
+	statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+
+	s := headerStyle.Render("RSS Feed Generator") + "\n\n"
+	s += "Select a series to generate RSS feed:\n\n"
+
+	for i, series := range m.series {
+		cursor := " "
+		if m.cursor == i {
+			cursor = ">"
+		}
+
+		line := fmt.Sprintf("%s %s", cursor, extractFilename(series.S3Path))
+		if m.cursor == i {
+			line = selectedStyle.Render(line)
+		} else {
+			line = normalStyle.Render(line)
+		}
+		s += line + "\n"
+	}
+
+	s += "\n" + statusStyle.Render("j/k: navigate • enter/space: generate feed • q: quit")
+
+	if m.loading {
+		s += "\n\n" + statusStyle.Render("Generating feed...")
+	} else if m.status != "" {
+		s += "\n\n" + statusStyle.Render(m.status)
+	}
+
+	return s
+}
+
+func extractFilename(s3Path string) string {
+	filename := filepath.Base(s3Path)
+	if filename == "." || filename == "/" {
+		return s3Path
+	}
+	return filename
+}
+
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: sumppi <series-guid>")
-		os.Exit(1)
+	p := tea.NewProgram(initialModel())
+	if _, err := p.Run(); err != nil {
+		log.Fatalf("Error running program: %v", err)
 	}
-
-	guid := os.Args[1]
-
-	fmt.Printf("Fetching series data for GUID: %s\n", guid)
-	seriesData, err := fetchSeriesData(guid)
-	if err != nil {
-		log.Fatalf("Error fetching series data: %v", err)
-	}
-
-	fmt.Printf("Series: %s by %s\n", seriesData.Title, seriesData.Author)
-	fmt.Printf("Episodes: %d\n", len(seriesData.Episodes))
-
-	rssXML, err := generateRSSFeed(seriesData)
-	if err != nil {
-		log.Fatalf("Error generating RSS feed: %v", err)
-	}
-
-	filename := fmt.Sprintf("%s.rss", guid)
-	err = os.WriteFile(filename, []byte(rssXML), 0644)
-	if err != nil {
-		log.Fatalf("Error writing RSS file: %v", err)
-	}
-
-	fmt.Printf("RSS feed written to %s\n", filename)
 }
