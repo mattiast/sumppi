@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -82,6 +83,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loading = true
 				return m, m.generateAndUploadFeed()
 			}
+		case "c":
+			if !m.loading {
+				return m, m.copyURLToClipboard()
+			}
 		}
 	case feedResult:
 		m.loading = false
@@ -96,7 +101,7 @@ type feedResult string
 func (m model) generateFeed() tea.Cmd {
 	return func() tea.Msg {
 		series := m.series[m.cursor]
-		
+
 		seriesData, err := fetchSeriesData(series.GUID)
 		if err != nil {
 			return feedResult(fmt.Sprintf("Error fetching series data: %v", err))
@@ -125,7 +130,7 @@ func (m model) generateFeed() tea.Cmd {
 func (m model) generateAndUploadFeed() tea.Cmd {
 	return func() tea.Msg {
 		series := m.series[m.cursor]
-		
+
 		seriesData, err := fetchSeriesData(series.GUID)
 		if err != nil {
 			return feedResult(fmt.Sprintf("Error fetching series data: %v", err))
@@ -143,6 +148,24 @@ func (m model) generateAndUploadFeed() tea.Cmd {
 		}
 
 		return feedResult(fmt.Sprintf("RSS feed uploaded to %s (%s by %s, %d episodes)", series.S3Path, seriesData.Title, seriesData.Author, len(seriesData.Episodes)))
+	}
+}
+
+func (m model) copyURLToClipboard() tea.Cmd {
+	return func() tea.Msg {
+		series := m.series[m.cursor]
+
+		url, err := generateS3URL(series.S3Path)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error generating URL: %v", err))
+		}
+
+		err = clipboard.WriteAll(url)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error copying to clipboard: %v", err))
+		}
+
+		return feedResult(fmt.Sprintf("URL copied to clipboard: %s", url))
 	}
 }
 
@@ -174,7 +197,7 @@ func (m model) View() string {
 	if m.s3Client != nil {
 		s3Status = " • u: upload to S3"
 	}
-	s += "\n" + statusStyle.Render(fmt.Sprintf("j/k: navigate • enter/space: generate feed%s • q: quit", s3Status))
+	s += "\n" + statusStyle.Render(fmt.Sprintf("j/k: navigate • enter/space: generate feed%s • c: copy URL • q: quit", s3Status))
 
 	if m.loading {
 		s += "\n\n" + statusStyle.Render("Generating feed...")

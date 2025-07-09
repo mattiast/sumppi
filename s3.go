@@ -48,7 +48,6 @@ func (s *S3Client) UploadRSSContent(ctx context.Context, rssContent, s3Path stri
 	return nil
 }
 
-
 func parseS3Path(s3Path string) (bucket, key string, err error) {
 	if !strings.HasPrefix(s3Path, "s3://") {
 		return "", "", fmt.Errorf("invalid S3 path: must start with s3://")
@@ -61,4 +60,13 @@ func parseS3Path(s3Path string) (bucket, key string, err error) {
 	}
 
 	return parts[0], parts[1], nil
+}
+
+func generateS3URL(s3Path string) (string, error) {
+	bucket, key, err := parseS3Path(s3Path)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("https://%s.s3.amazonaws.com/%s", bucket, key), nil
 }
