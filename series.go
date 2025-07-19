@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 type SeriesConfig struct {
@@ -115,4 +116,26 @@ func fetchSeriesData(guid string) (*SeriesData, error) {
 	}
 
 	return &apiResponse.Data, nil
+}
+
+func getLatestEpisodeDate(episodes []Episode) (string, error) {
+	if len(episodes) == 0 {
+		return "", fmt.Errorf("no episodes found")
+	}
+
+	latestDate := episodes[0].PublicationDate
+	for _, episode := range episodes[1:] {
+		if episode.PublicationDate > latestDate {
+			latestDate = episode.PublicationDate
+		}
+	}
+
+	// Parse and format the date nicely
+	parsedTime, err := time.Parse(time.RFC3339, latestDate)
+	if err != nil {
+		// If parsing fails, return the original date
+		return latestDate, nil
+	}
+
+	return parsedTime.Format("Jan 2, 2006"), nil
 }

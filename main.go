@@ -87,6 +87,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.loading {
 				return m, m.copyURLToClipboard()
 			}
+		case "d":
+			if !m.loading {
+				m.loading = true
+				return m, m.showLatestEpisodeDate()
+			}
 		}
 	case feedResult:
 		m.loading = false
@@ -169,6 +174,24 @@ func (m model) copyURLToClipboard() tea.Cmd {
 	}
 }
 
+func (m model) showLatestEpisodeDate() tea.Cmd {
+	return func() tea.Msg {
+		series := m.series[m.cursor]
+
+		seriesData, err := fetchSeriesData(series.GUID)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error fetching series data: %v", err))
+		}
+
+		latestDate, err := getLatestEpisodeDate(seriesData.Episodes)
+		if err != nil {
+			return feedResult(fmt.Sprintf("Error finding latest episode: %v", err))
+		}
+
+		return feedResult(fmt.Sprintf("Latest episode date: %s", latestDate))
+	}
+}
+
 func (m model) View() string {
 	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
 	selectedStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("170"))
@@ -197,7 +220,7 @@ func (m model) View() string {
 	if m.s3Client != nil {
 		s3Status = " • u: upload to S3"
 	}
-	s += "\n" + statusStyle.Render(fmt.Sprintf("j/k: navigate • enter/space: generate feed%s • c: copy URL • q: quit", s3Status))
+	s += "\n" + statusStyle.Render(fmt.Sprintf("j/k: navigate • enter/space: generate feed%s • d: show latest episode • c: copy URL • q: quit", s3Status))
 
 	if m.loading {
 		s += "\n\n" + statusStyle.Render("Generating feed...")
