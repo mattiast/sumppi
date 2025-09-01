@@ -123,19 +123,32 @@ func getLatestEpisodeDate(episodes []Episode) (string, error) {
 		return "", fmt.Errorf("no episodes found")
 	}
 
-	latestDate := episodes[0].PublicationDate
-	for _, episode := range episodes[1:] {
-		if episode.PublicationDate > latestDate {
+	now := time.Now()
+	oneWeekFromNow := now.Add(7 * 24 * time.Hour)
+
+	var latestDate string
+	var latestTime time.Time
+
+	for _, episode := range episodes {
+		episodeTime, err := time.Parse(time.RFC3339, episode.PublicationDate)
+		if err != nil {
+			continue // Skip episodes with invalid dates
+		}
+
+		// Skip episodes more than a week in the future
+		if episodeTime.After(oneWeekFromNow) {
+			continue
+		}
+
+		if latestDate == "" || episodeTime.After(latestTime) {
 			latestDate = episode.PublicationDate
+			latestTime = episodeTime
 		}
 	}
 
-	// Parse and format the date nicely
-	parsedTime, err := time.Parse(time.RFC3339, latestDate)
-	if err != nil {
-		// If parsing fails, return the original date
-		return latestDate, nil
+	if latestDate == "" {
+		return "", fmt.Errorf("no valid episodes found")
 	}
 
-	return parsedTime.Format("Jan 2, 2006"), nil
+	return latestTime.Format("Jan 2, 2006"), nil
 }

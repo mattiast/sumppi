@@ -56,7 +56,9 @@ func formatDuration(seconds int) string {
 	return fmt.Sprintf("%d:%02d", minutes, secs)
 }
 
-func generateRSSFeed(seriesData *SeriesData) (string, error) {
+func generateRSSFeed(seriesData *SeriesData, allowFutureEpisodes bool) (string, error) {
+	now := time.Now()
+	oneWeekFromNow := now.Add(7 * 24 * time.Hour)
 
 	feed := RSSFeed{
 		Version: "2.0",
@@ -73,6 +75,11 @@ func generateRSSFeed(seriesData *SeriesData) (string, error) {
 		episodePubDate, err := time.Parse(time.RFC3339, episode.PublicationDate)
 		if err != nil {
 			episodePubDate = time.Now()
+		}
+
+		// Skip episodes more than a week in the future unless allowed
+		if !allowFutureEpisodes && episodePubDate.After(oneWeekFromNow) {
+			continue
 		}
 
 		item := Item{
