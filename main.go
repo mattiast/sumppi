@@ -21,6 +21,7 @@ type model struct {
 	loading  bool
 	status   string
 	s3Client *S3Client
+	settings Settings
 }
 
 func initialModel() model {
@@ -38,6 +39,7 @@ func initialModel() model {
 		series:   config.Series,
 		selected: make(map[int]struct{}),
 		s3Client: s3Client,
+		settings: config.Settings,
 	}
 }
 
@@ -112,7 +114,7 @@ func (m model) generateFeed() tea.Cmd {
 			return feedResult(fmt.Sprintf("Error fetching series data: %v", err))
 		}
 
-		rssXML, err := generateRSSFeed(seriesData, false)
+		rssXML, err := generateRSSFeed(seriesData, false, m.settings)
 		if err != nil {
 			return feedResult(fmt.Sprintf("Error generating RSS feed: %v", err))
 		}
@@ -141,7 +143,7 @@ func (m model) generateAndUploadFeed() tea.Cmd {
 			return feedResult(fmt.Sprintf("Error fetching series data: %v", err))
 		}
 
-		rssXML, err := generateRSSFeed(seriesData, false)
+		rssXML, err := generateRSSFeed(seriesData, false, m.settings)
 		if err != nil {
 			return feedResult(fmt.Sprintf("Error generating RSS feed: %v", err))
 		}
