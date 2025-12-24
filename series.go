@@ -8,7 +8,12 @@ import (
 )
 
 type SeriesConfig struct {
-	Series []Series `toml:"series"`
+	Settings Settings `toml:"settings"`
+	Series   []Series `toml:"series"`
+}
+
+type Settings struct {
+	Timezone string `toml:"timezone"`
 }
 
 type Series struct {

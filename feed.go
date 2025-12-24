@@ -56,7 +56,41 @@ func formatDuration(seconds int) string {
 	return fmt.Sprintf("%d:%02d", minutes, secs)
 }
 
-func generateRSSFeed(seriesData *SeriesData, allowFutureEpisodes bool) (string, error) {
+func formatDescriptionWithAvailability(episode Episode, loc *time.Location) string {
+	description := episode.Description
+
+	// Check if there are availability periods
+	if len(episode.AvailabilityPeriods) > 0 {
+		// Get the first availability period's start date
+		startDate := episode.AvailabilityPeriods[0].StartDate
+
+		// Only add if start date is not empty
+		if startDate != "" {
+			// Try to parse and format the date nicely
+			if t, err := time.Parse(time.RFC3339, startDate); err == nil {
+				// Convert to the specified timezone
+				tInZone := t.In(loc)
+				formattedDate := tInZone.Format("Available from: Jan 2, 2006 15:04 MST")
+				description = formattedDate + "\n\n" + description
+			} else {
+				// If parsing fails, use the raw date
+				description = "Available from: " + startDate + "\n\n" + description
+			}
+		}
+	}
+
+	return description
+}
+
+func generateRSSFeed(seriesData *SeriesData, allowFutureEpisodes bool, settings Settings) (string, error) {
+	// Load timezone location, default to UTC if not specified or invalid
+	loc := time.UTC
+	if settings.Timezone != "" {
+		if l, err := time.LoadLocation(settings.Timezone); err == nil {
+			loc = l
+		}
+	}
+
 	now := time.Now()
 	oneWeekFromNow := now.Add(7 * 24 * time.Hour)
 
@@ -84,7 +118,7 @@ func generateRSSFeed(seriesData *SeriesData, allowFutureEpisodes bool) (string, 
 
 		item := Item{
 			Title:       episode.Title,
-			Description: episode.Description,
+			Description: formatDescriptionWithAvailability(episode, loc),
 			PubDate:     episodePubDate.Format(time.RFC1123Z),
 			GUID:        GUID{IsPermaLink: "false", Value: episode.GUID},
 			Enclosure: Enclosure{
