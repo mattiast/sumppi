@@ -59,24 +59,28 @@ func formatDuration(seconds int) string {
 func formatDescriptionWithAvailability(episode Episode, loc *time.Location) string {
 	description := episode.Description
 
-	// Check if there are availability periods
-	if len(episode.AvailabilityPeriods) > 0 {
-		// Get the first availability period's start date
-		startDate := episode.AvailabilityPeriods[0].StartDate
-
-		// Only add if start date is not empty
-		if startDate != "" {
-			// Try to parse and format the date nicely
-			if t, err := time.Parse(time.RFC3339, startDate); err == nil {
-				// Convert to the specified timezone
-				tInZone := t.In(loc)
-				formattedDate := tInZone.Format("Available from: Jan 2, 2006 15:04 MST")
-				description = formattedDate + "\n\n" + description
-			} else {
-				// If parsing fails, use the raw date
-				description = "Available from: " + startDate + "\n\n" + description
-			}
+	// Find the earliest start date among non-paid availability periods
+	var earliest *time.Time
+	for _, ap := range episode.AvailabilityPeriods {
+		if ap.Type == "paid" {
+			continue
 		}
+		if ap.StartDate == "" {
+			continue
+		}
+		t, err := time.Parse(time.RFC3339, ap.StartDate)
+		if err != nil {
+			continue
+		}
+		if earliest == nil || t.Before(*earliest) {
+			earliest = &t
+		}
+	}
+
+	if earliest != nil {
+		tInZone := earliest.In(loc)
+		formattedDate := tInZone.Format("Available from: Jan 2, 2006 15:04 MST")
+		description = formattedDate + "\n\n" + description
 	}
 
 	return description
