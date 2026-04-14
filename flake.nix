@@ -18,15 +18,17 @@
 
     in
     {
-      devShell = forAllSystems (system:
+      devShells = forAllSystems (system:
         let pkgs = nixpkgsFor.${system};
-        in pkgs.mkShell {
-          buildInputs = with pkgs; [
-            go
-            gopls
-            # goimports
-            go-tools
-          ];
+        in {
+          default = pkgs.mkShell {
+            buildInputs = with pkgs; [
+              go
+              gopls
+              # goimports
+              go-tools
+            ];
+          };
         });
     };
 }
