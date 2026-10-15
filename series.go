@@ -17,8 +17,9 @@ type Settings struct {
 }
 
 type Series struct {
-	GUID   string `toml:"guid"`
-	S3Path string `toml:"s3_path"`
+	GUID       string `toml:"guid"`
+	S3Path     string `toml:"s3_path"`
+	MaxAgeDays int    `toml:"max_age_days"`
 }
 
 type APIResponse struct {

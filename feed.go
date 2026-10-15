@@ -86,7 +86,11 @@ func formatDescriptionWithAvailability(episode Episode, loc *time.Location) stri
 	return description
 }
 
-func generateRSSFeed(seriesData *SeriesData, allowFutureEpisodes bool, settings Settings) (string, error) {
+func generateRSSFeed(seriesData *SeriesData, allowFutureEpisodes bool, settings Settings, maxAgeDays int) (string, int, error) {
+	return generateRSSFeedAt(seriesData, allowFutureEpisodes, settings, maxAgeDays, time.Now())
+}
+
+func generateRSSFeedAt(seriesData *SeriesData, allowFutureEpisodes bool, settings Settings, maxAgeDays int, now time.Time) (string, int, error) {
 	// Load timezone location, default to UTC if not specified or invalid
 	loc := time.UTC
 	if settings.Timezone != "" {
@@ -95,8 +99,9 @@ func generateRSSFeed(seriesData *SeriesData, allowFutureEpisodes bool, settings 
 		}
 	}
 
-	now := time.Now()
 	oneWeekFromNow := now.Add(7 * 24 * time.Hour)
+	// UTC days are always 24 hours, even across local daylight saving changes.
+	cutoff := now.UTC().AddDate(0, 0, -maxAgeDays)
 
 	feed := RSSFeed{
 		Version: "2.0",
@@ -112,7 +117,11 @@ func generateRSSFeed(seriesData *SeriesData, allowFutureEpisodes bool, settings 
 	for _, episode := range seriesData.Episodes {
 		episodePubDate, err := time.Parse(time.RFC3339, episode.PublicationDate)
 		if err != nil {
-			episodePubDate = time.Now()
+			continue
+		}
+
+		if maxAgeDays > 0 && episodePubDate.Before(cutoff) {
+			continue
 		}
 
 		// Skip episodes more than a week in the future unless allowed
@@ -138,8 +147,8 @@ func generateRSSFeed(seriesData *SeriesData, allowFutureEpisodes bool, settings 
 
 	xmlData, err := xml.MarshalIndent(feed, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal XML: %w", err)
+		return "", 0, fmt.Errorf("failed to marshal XML: %w", err)
 	}
 
-	return xml.Header + string(xmlData), nil
+	return xml.Header + string(xmlData), len(feed.Channel.Items), nil
 }

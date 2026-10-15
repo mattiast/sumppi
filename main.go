@@ -54,6 +54,12 @@ func loadConfig() (*SeriesConfig, error) {
 		return nil, fmt.Errorf("failed to decode config file: %w", err)
 	}
 
+	for i, series := range config.Series {
+		if series.MaxAgeDays < 0 {
+			return nil, fmt.Errorf("series %d (%s): max_age_days must be non-negative", i+1, series.GUID)
+		}
+	}
+
 	return &config, nil
 }
 
@@ -114,7 +120,7 @@ func (m model) generateFeed() tea.Cmd {
 			return feedResult(fmt.Sprintf("Error fetching series data: %v", err))
 		}
 
-		rssXML, err := generateRSSFeed(seriesData, false, m.settings)
+		rssXML, episodeCount, err := generateRSSFeed(seriesData, false, m.settings, series.MaxAgeDays)
 		if err != nil {
 			return feedResult(fmt.Sprintf("Error generating RSS feed: %v", err))
 		}
@@ -130,7 +136,7 @@ func (m model) generateFeed() tea.Cmd {
 			return feedResult(fmt.Sprintf("Error writing RSS file: %v", err))
 		}
 
-		return feedResult(fmt.Sprintf("RSS feed written to %s (%s by %s, %d episodes)", filename, seriesData.Title, seriesData.Author, len(seriesData.Episodes)))
+		return feedResult(fmt.Sprintf("RSS feed written to %s (%s by %s, %d episodes)", filename, seriesData.Title, seriesData.Author, episodeCount))
 	}
 }
 
@@ -143,7 +149,7 @@ func (m model) generateAndUploadFeed() tea.Cmd {
 			return feedResult(fmt.Sprintf("Error fetching series data: %v", err))
 		}
 
-		rssXML, err := generateRSSFeed(seriesData, false, m.settings)
+		rssXML, episodeCount, err := generateRSSFeed(seriesData, false, m.settings, series.MaxAgeDays)
 		if err != nil {
 			return feedResult(fmt.Sprintf("Error generating RSS feed: %v", err))
 		}
@@ -154,7 +160,7 @@ func (m model) generateAndUploadFeed() tea.Cmd {
 			return feedResult(fmt.Sprintf("Error uploading to S3: %v", err))
 		}
 
-		return feedResult(fmt.Sprintf("RSS feed uploaded to %s (%s by %s, %d episodes)", series.S3Path, seriesData.Title, seriesData.Author, len(seriesData.Episodes)))
+		return feedResult(fmt.Sprintf("RSS feed uploaded to %s (%s by %s, %d episodes)", series.S3Path, seriesData.Title, seriesData.Author, episodeCount))
 	}
 }
 
